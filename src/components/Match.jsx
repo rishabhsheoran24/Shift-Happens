@@ -23,8 +23,8 @@ function HpBar({ label, hp }) {
   return (
     <div style={{ margin: '8px 0' }}>
       <div>{label}: {Math.round(hp)} / {MAX_HP}</div>
-      <div style={{ width: 300, height: 20, background: '#333', borderRadius: 10, overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: pct > 30 ? '#4caf50' : '#f44336' }} />
+      <div className="hp-track">
+        <div className="hp-fill" style={{ width: `${pct}%`, background: pct > 30 ? '#5aa02c' : '#c0392b' }} />
       </div>
     </div>
   )
@@ -108,6 +108,13 @@ function CardMedia({ card }) {
   return <img src={card.url} alt={card.title} width="300" onError={() => setFailed(true)} />
 }
 
+function FeedVideo({ stream, muted = false, mirror = false }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    if (ref.current) ref.current.srcObject = stream || null
+  }, [stream])
+  return <video ref={ref} autoPlay playsInline muted={muted} style={{ transform: mirror ? 'scaleX(-1)' : 'none' }} />
+}
 export default function Match({
   roomCode,
   uid,
@@ -119,6 +126,8 @@ export default function Match({
   onPlayAgain,
   onBackToLobby,
   rematchWaiting = false,
+    localStream = null,
+  remoteStream = null,
   opponentWantsRematch = false,
 }) {
   const [match, setMatch] = useState(null)
@@ -130,6 +139,7 @@ export default function Match({
   const [myShield, setMyShieldUi] = useState(null) // my active shield: { effect, until }
   const [staleIds, setStaleIds] = useState([])
   const [notice, setNotice] = useState('')
+    const [cardPage, setCardPage] = useState(0)
   const { elixir, spend } = useElixir()
 
   const laughRef = useRef(laughScore)
@@ -421,93 +431,128 @@ export default function Match({
   const minutes = Math.floor(timeLeft / 60)
   const seconds = String(timeLeft % 60).padStart(2, '0')
 
+  
+  const myPct = Math.max(0, Math.min(100, (myHp / MAX_HP) * 100))
+  const oppPct = Math.max(0, Math.min(100, (opponentHp / MAX_HP) * 100))
+  const pageCount = Math.max(1, Math.ceil(deckCards.length / 5))
+  const visibleCards = deckCards.slice(cardPage * 5, cardPage * 5 + 5)
+
+  const thumb = (card) => {
+    if (card.type === 'shield') return <div className="emoji">{SHIELD_EMOJI[card.effect] ?? '🛡️'}</div>
+    if (card.type === 'audio') return <div className="emoji">🎵</div>
+    if (!isSafeUrl(card.url)) return <div className="emoji">❓</div>
+    if (card.type === 'video') return <video src={card.url} muted preload="metadata" />
+    return <img src={card.url} alt="" />
+  }
+
   return (
-    <div style={{ padding: 16 }}>
-      <h3>
-        {phase === 'overtime' ? 'OVERTIME! ' : ''}Time: {minutes}:{seconds}
-      </h3>
+    <main className="arena scene">
+      <div className="top-hud">
+        <div className="timer">
+          <small>{phase === 'overtime' ? 'OVERTIME' : 'ROUND 1'}</small>
+          <b>{String(minutes).padStart(2, '0')}:{seconds}</b>
+        </div>
+      </div>
 
-      {!over && !faceVisible && (
-        <p style={{ color: '#f87171', fontWeight: 'bold' }}>
-          ⚠️ We can't see your face! Your composure is draining.
-        </p>
-      )}
-      {!over && opponentLeft && (
-        <p style={{ color: '#facc15' }}>Opponent disconnected... you win if they don't return.</p>
-      )}
+      <div className="hud-messages">
+        {!over && !faceVisible && <p>⚠️ We can't see your face! Your composure is draining.</p>}
+        {!over && opponentLeft && <p>Opponent disconnected... you win if they don't return.</p>}
+        {!over && myShield && (
+          <p>{SHIELD_EMOJI[myShield.effect]} Shield active for <Countdown until={myShield.until} /> s</p>
+        )}
+        {notice && <p>{notice}</p>}
+        {attackerBanner && <p>{attackerBanner}</p>}
+        {!over && busy && !myShield && <p>⏳ Your card is still active.</p>}
+        {!over && <p>😂 Laugh meter: {Math.round(laughScore)}</p>}
+      </div>
 
-      <HpBar label="You" hp={myHp} />
-      <HpBar label="Opponent" hp={opponentHp} />
-      <p>
-        Points — You: <b>{myScore}</b> | Opponent: <b>{theirScore}</b> &nbsp;·&nbsp; Your laugh meter:{' '}
-        {Math.round(laughScore)}
-      </p>
+      <section className="battlefield">
+        <article className="fighter blue">
+          <div className="hp"><i style={{ height: `${myPct}%` }} /><b>{Math.round(myHp)} HP</b></div>
+          <div className="screen-frame blue-frame">
+            <div className="video-feed blue-feed">
+              <FeedVideo stream={localStream} muted mirror />
+              {!over && myShield && <div className="shield-badge">{SHIELD_EMOJI[myShield.effect]}</div>}
+              {!over && current && (
+                <div className="meme-on-feed">
+                  <p>
+                    {current.attack.card.title} (x{multiplierOf(current.attack.card)}). Don't laugh!
+                    {myShield?.effect === 'block' && ' 🕶️ Block!'}
+                    {myShield?.effect === 'halve' && ' ☂️ Halved!'}
+                  </p>
+                  {renderCard(current.attack.card)}
+                </div>
+              )}
+            </div>
+            <div className="wood-grain" />
+          </div>
+          <div className="score-stone"><small>SCORE</small><b>{myScore}</b></div>
+        </article>
+
+        <div className="versus"><span>VS</span><i /></div>
+
+        <article className="fighter red">
+          <div className="hp"><i style={{ height: `${oppPct}%` }} /><b className="opponent-hp-label">{Math.round(opponentHp)} HP</b></div>
+          <div className="screen-frame red-frame">
+            <div className="video-feed red-feed">
+              <FeedVideo stream={remoteStream} muted />
+            </div>
+            <div className="wood-grain" />
+          </div>
+          <div className="score-stone"><small>SCORE</small><b>{theirScore}</b></div>
+        </article>
+      </section>
+
+      <section className="deck-zone">
+        <div className="elixir">
+          <div className="flask"><i style={{ height: `${Math.min(100, Math.floor(elixir) * 10)}%` }} /></div>
+          <div><small>ELIXIR</small><b>{Math.floor(elixir)}<span>/10</span></b></div>
+        </div>
+        <div className="deck-controls">
+          <button className="deck-arrow up" onClick={() => setCardPage((p) => Math.min(pageCount - 1, p + 1))} disabled={cardPage >= pageCount - 1} aria-label="Show next five cards">⌃</button>
+          <button className="deck-arrow down" onClick={() => setCardPage((p) => Math.max(0, p - 1))} disabled={cardPage === 0} aria-label="Show previous five cards">⌄</button>
+        </div>
+        <div className={`card-rack page-${cardPage}`}>
+          {visibleCards.map((card, i) => {
+            const used = usedIds.includes(card.id)
+            const isShield = card.type === 'shield'
+            const disabled = over || used || elixir < costOf(card) || busy
+            return (
+              <button
+                key={card.id}
+                className={`battle-card ${used ? 'used' : ''}`}
+                onClick={() => (isShield ? handleShield(card) : handleAttack(card))}
+                disabled={disabled}
+                style={{ '--tone': isShield ? '#4c7fb5' : '#c0923d', '--i': i }}
+              >
+                <span className="cost">{costOf(card)}</span>
+                <div className="card-art">{thumb(card)}</div>
+                <strong>{card.title}</strong>
+                <small>{isShield ? `shield · ${card.effect} · ${SHIELD_SECONDS}s` : `${card.type} · x${multiplierOf(card)}`}</small>
+              </button>
+            )
+          })}
+        </div>
+      </section>
 
       {over && (
-        <div>
-          <h1>
-            {outcome === 'win' ? '🏆 YOU WIN!' : outcome === 'lose' ? '💀 YOU LOSE' : '🤝 TIE'}
-          </h1>
-          {opponentLeft && <p style={{ color: '#facc15' }}>Your opponent left the room.</p>}
-          <button onClick={onPlayAgain} disabled={rematchWaiting || opponentLeft}>
-            {rematchWaiting
-              ? 'Waiting for your opponent...'
-              : opponentWantsRematch
-                ? 'Opponent wants a rematch: Play again'
-                : 'Play again'}
-          </button>{' '}
-          <button onClick={onBackToLobby}>Back to lobby</button>
-        </div>
-      )}
-
-      {/* ---- the meme is on my screen (no warning, it starts right away) ---- */}
-      {!over && current && (
-        <div style={{ border: '3px solid red', padding: 8, margin: '12px 0' }}>
-          <p>
-            Opponent played: {current.attack.card.title}. Don't laugh! (x{multiplierOf(current.attack.card)} damage){' '}
-            {myShield?.effect === 'block' && '🕶️ Block is active!'}
-            {myShield?.effect === 'halve' && '☂️ Damage halved!'}
-          </p>
-          {renderCard(current.attack.card)}
-        </div>
-      )}
-
-      {!over && myShield && (
-        <p style={{ color: '#60a5fa', fontWeight: 'bold' }}>
-          {SHIELD_EMOJI[myShield.effect]} Your shield is active for <Countdown until={myShield.until} /> s
-        </p>
-      )}
-
-      {notice && <p style={{ fontWeight: 'bold' }}>{notice}</p>}
-      {attackerBanner && <p style={{ color: '#93c5fd' }}>{attackerBanner}</p>}
-      {!over && busy && <p>⏳ Your card is still active. You can play another one when it ends.</p>}
-
-      <p>Elixir: {Math.floor(elixir)} / 10 | Cards left: {deckCards.length - usedIds.length}</p>
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        {deckCards.map((card) => {
-          const used = usedIds.includes(card.id)
-          const isShield = card.type === 'shield'
-          const canAfford = elixir >= costOf(card)
-          const disabled = over || used || !canAfford || busy
-          return (
-            <button
-              key={card.id}
-              onClick={() => (isShield ? handleShield(card) : handleAttack(card))}
-              disabled={disabled}
-              style={{
-                opacity: used ? 0.3 : 1,
-                textDecoration: used ? 'line-through' : 'none',
-                borderColor: isShield ? '#60a5fa' : undefined,
-              }}
-            >
-              {isShield
-                ? `${SHIELD_EMOJI[card.effect]} ${card.title} (shield: ${card.effect}, ${SHIELD_SECONDS}s, cost ${costOf(card)})`
-                : `${card.title} (${card.type}, cost ${costOf(card)}, x${multiplierOf(card)})`}
+        <div className="result-board">
+          <h1>{outcome === 'win' ? '🏆 YOU WIN!' : outcome === 'lose' ? '💀 YOU LOSE' : '🤝 TIE'}</h1>
+          {opponentLeft && <p>Your opponent left the room.</p>}
+          <div className="result-buttons">
+            <button className="stone-button gold" onClick={onPlayAgain} disabled={rematchWaiting || opponentLeft}>
+              <span>
+                {rematchWaiting
+                  ? 'Waiting for your opponent...'
+                  : opponentWantsRematch
+                    ? 'Opponent wants a rematch: Play again'
+                    : 'Play again'}
+              </span>
             </button>
-          )
-        })}
-      </div>
-    </div>
+            <button className="stone-button stone" onClick={onBackToLobby}><span>Back to lobby</span></button>
+          </div>
+        </div>
+      )}
+    </main>
   )
 }
