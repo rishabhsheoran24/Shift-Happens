@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 // One video tile. `muted` is true ONLY for your own tile, so you don't hear yourself.
-function Tile({ stream, label, muted, mirror }) {
+function Tile({ stream, label, muted, mirror, overlay = null }) {
   const videoRef = useRef(null)
 
   useEffect(() => {
@@ -19,6 +19,11 @@ function Tile({ stream, label, muted, mirror }) {
       />
       {!stream && <div style={styles.empty}>Waiting for video</div>}
       <span style={styles.label}>{label}</span>
+      {overlay && (
+        <div style={{ position: 'absolute', left: 0, right: 0, top: '25%', textAlign: 'center', fontSize: 64, pointerEvents: 'none' }}>
+          {overlay}
+        </div>
+      )}
     </div>
   )
 }
@@ -35,6 +40,8 @@ export default function VideoPanel({
   remoteStream,
   messages = [],
   onSendChat,
+  localOverlay = null,
+  remoteOverlay = null,
 }) {
   const [micOn, setMicOn] = useState(true)
   const [text, setText] = useState('')
@@ -64,8 +71,8 @@ export default function VideoPanel({
   return (
     <div style={styles.panel}>
       <div style={styles.tiles}>
-        <Tile stream={localStream} label="You" muted mirror />
-        <Tile stream={remoteStream} label="Opponent" muted={false} />
+                <Tile stream={localStream} label="You" muted mirror overlay={localOverlay} />
+                <Tile stream={remoteStream} label="Opponent" muted={false} overlay={remoteOverlay} />
       </div>
 
       <button

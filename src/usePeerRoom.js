@@ -2,6 +2,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Peer from "peerjs";
 
 const PREFIX = "pfa-"; // keeps our room ids unique on the free PeerJS server
+const TURN_URL = import.meta.env.VITE_TURN_URL;
+const PEER_OPTIONS = {
+  config: {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      ...(TURN_URL
+        ? [
+            {
+              urls: TURN_URL.split(",").map((u) => u.trim()),
+              username: import.meta.env.VITE_TURN_USER,
+              credential: import.meta.env.VITE_TURN_PASS,
+            },
+          ]
+        : []),
+    ],
+  },
+};
 const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no confusing O/0, I/1
 const makeCode = () =>
   Array.from({ length: 4 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join("");
@@ -88,7 +105,7 @@ export function usePeerRoom({ localStream, onMessage } = {}) {
 
       const code = makeCode();
       setRoomCode(code); // show the code right away, don't wait for the server
-      const peer = new Peer(PREFIX + code);
+      const peer = new Peer(PREFIX + code, PEER_OPTIONS);
       peerRef.current = peer;
 
       peer.on("open", () =>
@@ -141,7 +158,7 @@ export function usePeerRoom({ localStream, onMessage } = {}) {
       setError(null);
       setStatus("connecting");
 
-      const peer = new Peer();
+      const peer = new Peer(undefined, PEER_OPTIONS);
       peerRef.current = peer;
 
       peer.on("open", () => {
