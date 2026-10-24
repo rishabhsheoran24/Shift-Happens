@@ -42,6 +42,72 @@ function Countdown({ until }) {
   return <b>{left}</b>
 }
 
+// Shows one card (photo / gif / video / audio). Videos keep their sound.
+// If the browser refuses to start sound by itself, the video plays muted
+// and a "Tap to play with sound" button appears.
+function CardMedia({ card }) {
+  const ref = useRef(null)
+  const [failed, setFailed] = useState(false)
+  const [needsTap, setNeedsTap] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || (card.type !== 'video' && card.type !== 'audio')) return
+    const p = el.play()
+    if (p && p.catch) {
+      p.catch(() => {
+        if (card.type === 'video') {
+          el.muted = true
+          el.play().catch(() => {})
+        }
+        setNeedsTap(true)
+      })
+    }
+  }, [card.url, card.type])
+
+  function tapToPlay() {
+    const el = ref.current
+    if (!el) return
+    el.muted = false
+    el.play()
+      .then(() => setNeedsTap(false))
+      .catch(() => {})
+  }
+
+  if (failed) return <p>⚠️ Could not load this card: {card.url}</p>
+
+  const tapButton = needsTap && <button onClick={tapToPlay}>🔊 Tap to play with sound</button>
+
+  if (card.type === 'video') {
+    return (
+      <div>
+        <video
+          ref={ref}
+          src={card.url}
+          autoPlay
+          loop
+          playsInline
+          width="300"
+          onError={() => setFailed(true)}
+        />
+        <div>{tapButton}</div>
+      </div>
+    )
+  }
+
+  if (card.type === 'audio') {
+    return (
+      <div>
+        <p>🎵 {card.title}</p>
+        <audio ref={ref} src={card.url} autoPlay controls onError={() => setFailed(true)} />
+        <div>{tapButton}</div>
+      </div>
+    )
+  }
+
+  return <img src={card.url} alt={card.title} width="300" onError={() => setFailed(true)} />
+}
+
 export default function Match({
   roomCode,
   uid,
@@ -177,7 +243,8 @@ export default function Match({
     setCurrent({ attack: next, until: Date.now() + hitSeconds(next.card) * 1000 })
   }, [setCurrent])
 
-  // The attack is finished: tell the attacker what happened (this is where THEIR points come from).
+  // The attack is finished: tell the attacker how much damage it did (their points).
+  // The report does NOT say whether a shield was used.
   const finishCurrent = useCallback(
     (c, damage) => {
       const dealt = Math.round(damage * 10) / 10
@@ -189,8 +256,6 @@ export default function Match({
         attackId: c.attack.playId,
         attackerId: c.attack.playedBy,
         damage: dealt,
-        blocked: shield === 'block',
-        halved: shield === 'halve',
       }).catch(console.error)
       if (shield === 'block' && dealt === 0) showNotice('🕶️ Blocked! You took no damage.')
       else if (dealt > 0) showNotice(`😂 That attack cost you ${Math.round(dealt)} HP.`)
@@ -215,7 +280,7 @@ export default function Match({
     return () => clearInterval(t)
   }, [startNext, finishCurrent])
 
-  // Look at every NEW entry in the shared "plays" list.
+  // Look at every NEW entry in the shared "plays" list (shields are never shared).
   const plays = match?.plays
   useEffect(() => {
     if (!plays) return
@@ -232,14 +297,9 @@ export default function Match({
         setTimeout(() => setStaleIds((s) => [...s, p.playId]), STALE_MS)
         if (p.playedBy !== uid) queueRef.current.push(p) // an attack aimed at me
       }
-      if (p.kind === 'shield') {
-        const who = p.playedBy === uid ? 'me' : 'opp'
-        onOverlay?.(who, SHIELD_EMOJI[p.effect] ?? '🛡️')
-        setTimeout(() => onOverlay?.(who, null), SHIELD_SECONDS * 1000)
-      }
     })
     startNext()
-  }, [plays, uid, startNext, onOverlay])
+  }, [plays, uid, startNext])
 
   // ---------------- clock ----------------
   useEffect(() => {
@@ -322,30 +382,27 @@ export default function Match({
     playCardInMatch(roomCode, uid, card).catch(console.error)
   }
 
+  // A shield only works on MY device. Nothing about it is written to the shared match,
+  // so the opponent can't see it.
   function handleShield(card) {
     if (over || busy || usedIds.includes(card.id)) return
     if (!spend(costOf(card))) return
     setUsedIds((u) => [...u, card.id])
     const shield = { effect: card.effect, until: Date.now() + SHIELD_SECONDS * 1000 }
     setMyShield(shield)
+    onOverlay?.('me', SHIELD_EMOJI[card.effect] ?? '🛡️')
     setTimeout(() => {
       if (shieldRef.current === shield) setMyShield(null)
+      onOverlay?.('me', null)
     }, SHIELD_SECONDS * 1000)
-    addPlay(roomCode, uid, {
-      kind: 'shield',
-      effect: card.effect,
-      title: card.title,
-    }).catch(console.error)
   }
 
   function renderCard(card) {
     if (!isSafeUrl(card.url)) return <p>⚠️ Card blocked (untrusted link)</p>
-    if (card.type === 'video') return <video src={card.url} autoPlay muted loop width="300" />
-    if (card.type === 'audio') return <audio src={card.url} autoPlay controls />
-    return <img src={card.url} alt={card.title} width="300" />
+    return <CardMedia card={card} />
   }
 
-  // What the ATTACKER sees about their latest attack
+  // What the ATTACKER sees about their latest attack (no mention of shields)
   const myAttacks = allPlays.filter((p) => p.kind === 'attack' && p.playedBy === uid)
   const myLast = myAttacks[myAttacks.length - 1]
   const myLastHit = myLast && allPlays.find((p) => p.kind === 'hit' && p.attackId === myLast.playId)
@@ -354,11 +411,7 @@ export default function Match({
     attackerBanner = `Your ${typeLabel(myLast.card)} is on their screen right now...`
   } else if (myLastHit) {
     const pts = Math.round(myLastHit.damage)
-    if (myLastHit.blocked && pts === 0) attackerBanner = '🕶️ Your attack was BLOCKED. 0 points.'
-    else if (pts > 0) {
-      const tag = myLastHit.blocked ? ' (partly blocked)' : myLastHit.halved ? ' (halved)' : ''
-      attackerBanner = `🎯 Your attack landed${tag}! +${pts} points`
-    } else attackerBanner = '😐 They kept a poker face. 0 points.'
+    attackerBanner = pts > 0 ? `🎯 Your attack landed! +${pts} points` : '😐 No damage. 0 points.'
   }
 
   const minutes = Math.floor(timeLeft / 60)
