@@ -12,11 +12,11 @@ import {
   OVERTIME_SECONDS,
   NO_FACE_DAMAGE_PER_SECOND,
   FORFEIT_AFTER_MS,
-  ALERT_SECONDS,
 } from '../game/constants'
 
-// If an attack never gets answered (opponent crashed), unlock the attack buttons after this long.
-const STALE_MS = (ALERT_SECONDS + 10 + 6) * 1000
+const SHIELD_SECONDS = 10
+// If an attack never gets answered (opponent crashed), unlock the cards after this long.
+const STALE_MS = 20 * 1000
 
 function HpBar({ label, hp }) {
   const pct = Math.max(0, Math.min(100, (hp / MAX_HP) * 100))
@@ -30,13 +30,13 @@ function HpBar({ label, hp }) {
   )
 }
 
-// A tiny self-updating "2... 1..." number for the incoming-attack alert.
+// A tiny self-updating "10... 9..." number.
 function Countdown({ until }) {
   const [left, setLeft] = useState(0)
   useEffect(() => {
     const update = () => setLeft(Math.max(0, Math.ceil((until - Date.now()) / 1000)))
     update()
-    const t = setInterval(update, 100)
+    const t = setInterval(update, 200)
     return () => clearInterval(t)
   }, [until])
   return <b>{left}</b>
@@ -49,14 +49,19 @@ export default function Match({
   laughScore,
   faceVisible = true,
   opponentLeft = false,
-  onOverlay,   // NEW: onOverlay('me' | 'opp', emoji | null) draws a shield emoji on a video tile
+  onOverlay,
+  onPlayAgain,
+  onBackToLobby,
+  rematchWaiting = false,
+  opponentWantsRematch = false,
 }) {
   const [match, setMatch] = useState(null)
   const [usedIds, setUsedIds] = useState([])
   const [myHp, setMyHp] = useState(MAX_HP)
   const [timeLeft, setTimeLeft] = useState(MATCH_SECONDS)
   const [phase, setPhase] = useState('playing') // 'playing' | 'overtime'
-  const [current, setCurrentUi] = useState(null) // the attack I'm dealing with right now (see below)
+  const [current, setCurrentUi] = useState(null) // attack currently on MY screen: { attack, until }
+  const [myShield, setMyShieldUi] = useState(null) // my active shield: { effect, until }
   const [staleIds, setStaleIds] = useState([])
   const [notice, setNotice] = useState('')
   const { elixir, spend } = useElixir()
@@ -69,18 +74,21 @@ export default function Match({
   const proposedRef = useRef(false)
   const seenPlaysRef = useRef(null)
 
-  // ----- attack handling memory -----
-  // current = { attack, stage: 'alert' | 'hit', until, shield }
-  //   alert = the 2-second warning (I may play a shield)
-  //   hit   = the meme is on my screen, my laughing is multiplied
   const currentRef = useRef(null)
-  const queueRef = useRef([])        // attacks waiting for their turn
-  const hitDamageRef = useRef(0)     // damage taken during the current hit
+  const shieldRef = useRef(null)
+  const queueRef = useRef([]) // attacks waiting for their turn
+  const hitDamageRef = useRef(0) // damage taken during the current attack
+  const hitShieldRef = useRef(null) // which shield helped during the current attack
   const noticeTimerRef = useRef(null)
 
   const setCurrent = useCallback((value) => {
     currentRef.current = value
     setCurrentUi(value)
+  }, [])
+
+  const setMyShield = useCallback((value) => {
+    shieldRef.current = value
+    setMyShieldUi(value)
   }, [])
 
   const showNotice = useCallback((text) => {
@@ -106,9 +114,9 @@ export default function Match({
   })
 
   // ---------------- damage loop ----------------
-  // Every 0.2 s: work out how much HP I lose, using real elapsed time (dt).
+  // Every 0.2 s: work out how much HP I lose.
   //  - face hidden / tab hidden  -> fixed penalty
-  //  - attack card on my screen  -> laugh x card multiplier   (this damage becomes the attacker's points)
+  //  - attack card on my screen  -> laugh x card multiplier (shield: block = 0, halve = x0.5)
   //  - otherwise                 -> small "passive" damage
   useEffect(() => {
     let last = performance.now()
@@ -120,12 +128,18 @@ export default function Match({
 
       const laugh = laughRef.current
       const c = currentRef.current
+      const s = shieldRef.current
+      const shieldOn = s && Date.now() < s.until ? s.effect : null
       let damage = 0
       if (document.hidden || !faceRef.current) {
         damage = NO_FACE_DAMAGE_PER_SECOND * dt
       } else if (laugh > LAUGH_DEADZONE) {
-        if (c && c.stage === 'hit') {
-          damage = cardDps(laugh, c.attack.card, c.shield) * dt
+        if (c) {
+          let dps = cardDps(laugh, c.attack.card, null)
+          if (shieldOn === 'block') dps = 0
+          else if (shieldOn === 'halve') dps *= 0.5
+          if (shieldOn) hitShieldRef.current = shieldOn
+          damage = dps * dt
           hitDamageRef.current += Math.min(damage, hpRef.current)
         } else {
           damage = passiveDps(laugh) * dt
@@ -153,27 +167,32 @@ export default function Match({
   }, [roomCode, uid])
 
   // ---------------- attack flow ----------------
-  // Take the next waiting attack and start its 2-second warning.
+  // Take the next waiting attack and show it right away (no warning).
   const startNext = useCallback(() => {
     if (currentRef.current || overRef.current) return
     const next = queueRef.current.shift()
     if (!next) return
-    setCurrent({ attack: next, stage: 'alert', until: Date.now() + ALERT_SECONDS * 1000, shield: null })
+    hitDamageRef.current = 0
+    hitShieldRef.current = null
+    setCurrent({ attack: next, until: Date.now() + hitSeconds(next.card) * 1000 })
   }, [setCurrent])
 
   // The attack is finished: tell the attacker what happened (this is where THEIR points come from).
   const finishCurrent = useCallback(
     (c, damage) => {
       const dealt = Math.round(damage * 10) / 10
+      const shield = hitShieldRef.current
       hitDamageRef.current = 0
+      hitShieldRef.current = null
       addPlay(roomCode, uid, {
         kind: 'hit',
         attackId: c.attack.playId,
         attackerId: c.attack.playedBy,
         damage: dealt,
-        blocked: c.shield === 'block',
+        blocked: shield === 'block',
+        halved: shield === 'halve',
       }).catch(console.error)
-      if (c.shield === 'block') showNotice('🕶️ Blocked! You took no damage.')
+      if (shield === 'block' && dealt === 0) showNotice('🕶️ Blocked! You took no damage.')
       else if (dealt > 0) showNotice(`😂 That attack cost you ${Math.round(dealt)} HP.`)
       else showNotice('😐 Poker face! No damage.')
       setCurrent(null)
@@ -182,7 +201,7 @@ export default function Match({
     [roomCode, uid, setCurrent, startNext, showNotice]
   )
 
-  // Moves the current attack through its stages: alert -> hit -> finished.
+  // Checks every 0.1 s whether the attack on my screen has run out of time.
   useEffect(() => {
     const t = setInterval(() => {
       if (overRef.current) return
@@ -191,21 +210,10 @@ export default function Match({
         startNext()
         return
       }
-      const now = Date.now()
-      if (now < c.until) return
-      if (c.stage === 'alert') {
-        if (c.shield === 'block') {
-          finishCurrent(c, 0)
-          return
-        }
-        hitDamageRef.current = 0
-        setCurrent({ ...c, stage: 'hit', until: now + hitSeconds(c.attack.card) * 1000 })
-      } else {
-        finishCurrent(c, hitDamageRef.current)
-      }
+      if (Date.now() >= c.until) finishCurrent(c, hitDamageRef.current)
     }, 100)
     return () => clearInterval(t)
-  }, [startNext, finishCurrent, setCurrent])
+  }, [startNext, finishCurrent])
 
   // Look at every NEW entry in the shared "plays" list.
   const plays = match?.plays
@@ -227,7 +235,7 @@ export default function Match({
       if (p.kind === 'shield') {
         const who = p.playedBy === uid ? 'me' : 'opp'
         onOverlay?.(who, SHIELD_EMOJI[p.effect] ?? '🛡️')
-        setTimeout(() => onOverlay?.(who, null), 4000)
+        setTimeout(() => onOverlay?.(who, null), SHIELD_SECONDS * 1000)
       }
     })
     startNext()
@@ -296,31 +304,35 @@ export default function Match({
   const scores = scoresFromPlays(allPlays)
   const myScore = Math.round(scores[uid] ?? 0)
   const theirScore = Math.round(scores[opponentId] ?? 0)
-    useEffect(() => {
+
+  useEffect(() => {
     if (!outcome) return
     recordResult(roomCode, outcome, myScore).catch(console.error)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outcome])
-  // an attack is "open" until the target reports back; while one is open nobody can start another
-  const locked = unresolvedAttacks(allPlays).some((a) => !staleIds.includes(a.playId))
+
+  // I can't play a card while MY attack is still on their screen or MY shield is active.
+  const myAttackOpen = unresolvedAttacks(allPlays).some((a) => a.playedBy === uid && !staleIds.includes(a.playId))
+  const busy = myAttackOpen || !!myShield
 
   function handleAttack(card) {
-    if (over || locked || usedIds.includes(card.id)) return
+    if (over || busy || usedIds.includes(card.id)) return
     if (!spend(costOf(card))) return
     setUsedIds((u) => [...u, card.id])
     playCardInMatch(roomCode, uid, card).catch(console.error)
   }
 
   function handleShield(card) {
-    const c = currentRef.current
-    if (over || usedIds.includes(card.id)) return
-    if (!c || c.stage !== 'alert' || c.shield) return // only during the 2-second warning, once per attack
+    if (over || busy || usedIds.includes(card.id)) return
     if (!spend(costOf(card))) return
     setUsedIds((u) => [...u, card.id])
-    setCurrent({ ...c, shield: card.effect })
+    const shield = { effect: card.effect, until: Date.now() + SHIELD_SECONDS * 1000 }
+    setMyShield(shield)
+    setTimeout(() => {
+      if (shieldRef.current === shield) setMyShield(null)
+    }, SHIELD_SECONDS * 1000)
     addPlay(roomCode, uid, {
       kind: 'shield',
-      attackId: c.attack.playId,
       effect: card.effect,
       title: card.title,
     }).catch(console.error)
@@ -337,18 +349,16 @@ export default function Match({
   const myAttacks = allPlays.filter((p) => p.kind === 'attack' && p.playedBy === uid)
   const myLast = myAttacks[myAttacks.length - 1]
   const myLastHit = myLast && allPlays.find((p) => p.kind === 'hit' && p.attackId === myLast.playId)
-  const theirShield = myLast && allPlays.find((p) => p.kind === 'shield' && p.attackId === myLast.playId)
   let attackerBanner = ''
   if (myLast && !myLastHit) {
-    attackerBanner = theirShield
-      ? `${SHIELD_EMOJI[theirShield.effect]} They played ${theirShield.title}!`
-      : `Your ${typeLabel(myLast.card)} is on its way... they have ${ALERT_SECONDS} s to react.`
+    attackerBanner = `Your ${typeLabel(myLast.card)} is on their screen right now...`
   } else if (myLastHit) {
-    attackerBanner = myLastHit.blocked
-      ? '🕶️ Your attack was BLOCKED. 0 points.'
-      : myLastHit.damage > 0
-        ? `🎯 Your attack landed! +${Math.round(myLastHit.damage)} points`
-        : '😐 They kept a poker face. 0 points.'
+    const pts = Math.round(myLastHit.damage)
+    if (myLastHit.blocked && pts === 0) attackerBanner = '🕶️ Your attack was BLOCKED. 0 points.'
+    else if (pts > 0) {
+      const tag = myLastHit.blocked ? ' (partly blocked)' : myLastHit.halved ? ' (halved)' : ''
+      attackerBanner = `🎯 Your attack landed${tag}! +${pts} points`
+    } else attackerBanner = '😐 They kept a poker face. 0 points.'
   }
 
   const minutes = Math.floor(timeLeft / 60)
@@ -377,39 +387,43 @@ export default function Match({
       </p>
 
       {over && (
-        <h1>
-          {outcome === 'win' ? '🏆 YOU WIN!' : outcome === 'lose' ? '💀 YOU LOSE' : '🤝 TIE'}
-        </h1>
-      )}
-
-      {/* ---- incoming attack: 2-second warning (the meme itself stays hidden) ---- */}
-      {!over && current?.stage === 'alert' && (
-        <div style={{ border: '3px solid #facc15', padding: 8, margin: '12px 0', background: '#3a3000' }}>
-          <h3 style={{ margin: 0 }}>
-            🚨 INCOMING {typeLabel(current.attack.card)} ATTACK! (x{multiplierOf(current.attack.card)} damage,{' '}
-            {hitSeconds(current.attack.card)} s) — <Countdown until={current.until} />
-          </h3>
-          <p style={{ margin: '4px 0 0' }}>
-            {current.shield
-              ? `${SHIELD_EMOJI[current.shield]} Shield is up!`
-              : 'Play a shield card now, or brace yourself!'}
-          </p>
+        <div>
+          <h1>
+            {outcome === 'win' ? '🏆 YOU WIN!' : outcome === 'lose' ? '💀 YOU LOSE' : '🤝 TIE'}
+          </h1>
+          {opponentLeft && <p style={{ color: '#facc15' }}>Your opponent left the room.</p>}
+          <button onClick={onPlayAgain} disabled={rematchWaiting || opponentLeft}>
+            {rematchWaiting
+              ? 'Waiting for your opponent...'
+              : opponentWantsRematch
+                ? 'Opponent wants a rematch: Play again'
+                : 'Play again'}
+          </button>{' '}
+          <button onClick={onBackToLobby}>Back to lobby</button>
         </div>
       )}
 
-      {/* ---- the meme is on my screen ---- */}
-      {!over && current?.stage === 'hit' && (
+      {/* ---- the meme is on my screen (no warning, it starts right away) ---- */}
+      {!over && current && (
         <div style={{ border: '3px solid red', padding: 8, margin: '12px 0' }}>
           <p>
-            Opponent played: {current.attack.card.title}. Don't laugh!{' '}
-            {current.shield === 'halve' && '☂️ (damage halved)'}
+            Opponent played: {current.attack.card.title}. Don't laugh! (x{multiplierOf(current.attack.card)} damage){' '}
+            {myShield?.effect === 'block' && '🕶️ Block is active!'}
+            {myShield?.effect === 'halve' && '☂️ Damage halved!'}
           </p>
           {renderCard(current.attack.card)}
         </div>
       )}
 
+      {!over && myShield && (
+        <p style={{ color: '#60a5fa', fontWeight: 'bold' }}>
+          {SHIELD_EMOJI[myShield.effect]} Your shield is active for <Countdown until={myShield.until} /> s
+        </p>
+      )}
+
       {notice && <p style={{ fontWeight: 'bold' }}>{notice}</p>}
       {attackerBanner && <p style={{ color: '#93c5fd' }}>{attackerBanner}</p>}
+      {!over && busy && <p>⏳ Your card is still active. You can play another one when it ends.</p>}
 
       <p>Elixir: {Math.floor(elixir)} / 10 | Cards left: {deckCards.length - usedIds.length}</p>
 
@@ -418,9 +432,7 @@ export default function Match({
           const used = usedIds.includes(card.id)
           const isShield = card.type === 'shield'
           const canAfford = elixir >= costOf(card)
-          const disabled = isShield
-            ? over || used || !canAfford || !(current?.stage === 'alert' && !current.shield)
-            : over || used || !canAfford || locked
+          const disabled = over || used || !canAfford || busy
           return (
             <button
               key={card.id}
@@ -433,7 +445,7 @@ export default function Match({
               }}
             >
               {isShield
-                ? `${SHIELD_EMOJI[card.effect]} ${card.title} (shield: ${card.effect}, cost ${costOf(card)})`
+                ? `${SHIELD_EMOJI[card.effect]} ${card.title} (shield: ${card.effect}, ${SHIELD_SECONDS}s, cost ${costOf(card)})`
                 : `${card.title} (${card.type}, cost ${costOf(card)}, x${multiplierOf(card)})`}
             </button>
           )

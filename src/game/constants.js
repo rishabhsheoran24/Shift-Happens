@@ -11,7 +11,9 @@ export const FORFEIT_AFTER_MS = 10000
 
 // --- NEW: card-battle settings ---
 export const ALERT_SECONDS = 2         // warning time before an attack card appears
-export const PICK_SECONDS = 45         // deck-building time
+export const PICK_SECONDS = 60         // deck-building time
 // Balance knobs (change these while playtesting):
 export const PASSIVE_SCALE = 0.25      // laughing at nothing hurts only a little
 export const CARD_SCALE = 0.5          // laughing at an attack card hurts a lot (x card multiplier)
+export const SHIELD_SECONDS = 10       // how long a shield lasts
+export const STALE_MS = 20000          // unlock cards if the opponent's attack never finishes

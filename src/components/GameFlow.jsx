@@ -65,7 +65,9 @@ export default function GameFlow() {
   const [error, setError] = useState('')
   const [phase, setPhase] = useState('lobby')
   const [deck, setDeck] = useState(null)
-    const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState([])
+    const [rematch, setRematch] = useState('none')
+  const [oppRematch, setOppRematch] = useState(false)
   const [overlays, setOverlays] = useState({ me: null, opp: null })   // NEW: shield emojis on the tiles
   const createdRef = useRef(false)
   const startTriedRef = useRef(false)   // NEW: only try to start the match once
@@ -73,10 +75,13 @@ export default function GameFlow() {
   const camera = useLocalCamera()
     const room = usePeerRoom({
     localStream: camera.stream,
-    onMessage: (d) => {
-      if (d && d.type === 'chat' && typeof d.text === 'string') {
+        onMessage: (d) => {
+      if (!d) return
+      if (d.type === 'chat' && typeof d.text === 'string') {
         setMessages((m) => [...m.slice(-49), { from: 'them', text: d.text.slice(0, 200) }])
       }
+      if (d.type === 'rematch-request') setOppRematch(true)
+      if (d.type === 'rematch-go' && typeof d.code === 'string') joinRematch(d.code)
     },
   })
   const laugh = useLaughScore(camera.stream)
@@ -147,6 +152,61 @@ export default function GameFlow() {
     }
   }
 
+      function enterNewMatch(code) {
+    setActiveCode(code)
+    setDeck(null)
+    setOverlays({ me: null, opp: null })
+    setRematch('none')
+    setOppRematch(false)
+    startTriedRef.current = false
+    setPhase('pick')
+  }
+
+  async function startRematch() {
+    const [base, round] = activeCode.split('-')
+    const code = `${base}-${(Number(round) || 1) + 1}`
+    try {
+      await createMatch(code, uid)
+      room.send({ type: 'rematch-go', code })
+      enterNewMatch(code)
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  async function joinRematch(code) {
+    try {
+      await joinMatch(code, uid)
+      enterNewMatch(code)
+    } catch (e) {
+      setError('Could not start the rematch: ' + e.message)
+    }
+  }
+
+  function handlePlayAgain() {
+    setRematch('waiting')
+    room.send({ type: 'rematch-request' })
+  }
+
+  function backToLobby() {
+    room.leave()
+    createdRef.current = false
+    startTriedRef.current = false
+    setRole(null)
+    setActiveCode(null)
+    setDeck(null)
+    setMessages([])
+    setOverlays({ me: null, opp: null })
+    setRematch('none')
+    setOppRematch(false)
+    setError('')
+    setPhase('lobby')
+  }
+
+  useEffect(() => {
+    if (role === 'host' && rematch === 'waiting' && oppRematch) startRematch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, rematch, oppRematch])
     function sendChat(text) {
     room.send({ type: 'chat', text })
     setMessages((m) => [...m.slice(-49), { from: 'me', text }])
@@ -187,7 +247,11 @@ export default function GameFlow() {
             laughScore={laugh.score}
             faceVisible={laugh.faceVisible}                    // NEW
             opponentLeft={room.status === 'disconnected'}      // NEW
-            onOverlay={handleOverlay}                          // NEW
+            onOverlay={handleOverlay}  
+                        onPlayAgain={handlePlayAgain}
+            onBackToLobby={backToLobby}
+            rematchWaiting={rematch === 'waiting'}
+            opponentWantsRematch={oppRematch}                        // NEW
           />
         )}
       </div>
