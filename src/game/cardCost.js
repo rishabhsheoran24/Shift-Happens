@@ -53,6 +53,7 @@ const TRUSTED_HOSTS = [
 ]
 
 export function isSafeUrl(url) {
+  if (typeof url === 'string' && url.startsWith(import.meta.env.BASE_URL + 'library/')) return true
   try {
     const u = new URL(url)
     if (u.protocol !== 'https:') return false
