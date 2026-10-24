@@ -4,6 +4,7 @@ import { subscribeToMatch, playCardInMatch, addPlay, saveResult } from '../game/
 import { saveHp } from '../game/hpService'
 import { costOf, isSafeUrl, hitSeconds, multiplierOf, typeLabel } from '../game/cardCost'
 import { passiveDps, cardDps, scoresFromPlays, unresolvedAttacks, SHIELD_EMOJI } from '../game/combat'
+import { recordResult } from '../game/leaderboardService'
 import {
   MAX_HP,
   LAUGH_DEADZONE,
@@ -295,6 +296,11 @@ export default function Match({
   const scores = scoresFromPlays(allPlays)
   const myScore = Math.round(scores[uid] ?? 0)
   const theirScore = Math.round(scores[opponentId] ?? 0)
+    useEffect(() => {
+    if (!outcome) return
+    recordResult(roomCode, outcome, myScore).catch(console.error)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outcome])
   // an attack is "open" until the target reports back; while one is open nobody can start another
   const locked = unresolvedAttacks(allPlays).some((a) => !staleIds.includes(a.playId))
 

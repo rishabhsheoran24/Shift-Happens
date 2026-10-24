@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { signInAnonymously } from 'firebase/auth'
-import { auth } from '../firebase'
+import { watchUser, loginWithGoogle, playAsGuest, logout } from '../game/authService'
+import Leaderboard from './Leaderboard'
 import { useLocalCamera } from '../useLocalCamera'
 import { usePeerRoom } from '../usePeerRoom'
 import { useLaughScore } from '../game/useLaughScore'
@@ -56,6 +56,8 @@ function Video({ stream, muted = false, mirror = false, label, overlay = null })
 
 export default function GameFlow() {
   const [uid, setUid] = useState(null)
+  const [user, setUser] = useState(null)
+  const [authReady, setAuthReady] = useState(false)
   const [role, setRole] = useState(null)
   const [codeInput, setCodeInput] = useState('')
   const [activeCode, setActiveCode] = useState(null)
@@ -70,10 +72,12 @@ export default function GameFlow() {
   const room = usePeerRoom({ localStream: camera.stream, onMessage: () => {} })
   const laugh = useLaughScore(camera.stream)
 
-  useEffect(() => {
-    signInAnonymously(auth)
-      .then((c) => setUid(c.user.uid))
-      .catch((e) => setError(e.message))
+    useEffect(() => {
+    return watchUser((u) => {
+      setUser(u)
+      setUid(u ? u.uid : null)
+      setAuthReady(true)
+    })
   }, [])
 
   useEffect(() => {
@@ -176,7 +180,19 @@ export default function GameFlow() {
   return (
     <div style={{ maxWidth: 600, margin: '20px auto', padding: 16, color: '#eee' }}>
       <h2>Poker Face Arena</h2>
-      <p>{uid ? 'Signed in.' : 'Signing in...'}</p>
+            {!authReady && <p>Loading...</p>}
+      {authReady && !user && (
+        <div>
+          <button onClick={() => loginWithGoogle().catch((e) => setError(e.message))}>Sign in with Google</button>{' '}
+          <button onClick={() => playAsGuest().catch((e) => setError(e.message))}>Play as guest</button>
+        </div>
+      )}
+      {user && (
+        <p>
+          Signed in as {user.isAnonymous ? 'Guest' : user.displayName}{' '}
+          <button onClick={logout}>Log out</button>
+        </p>
+      )}
 
       <button onClick={camera.start} disabled={!!camera.stream}>Start camera</button>
       {camera.error && <p style={{ color: '#f87171' }}>Camera error: {camera.error}</p>}
@@ -201,6 +217,10 @@ export default function GameFlow() {
       {/* NEW: show connection problems (e.g. "Room not found. Check the code.") */}
       {room.error && <p style={{ color: '#f87171' }}>{room.error}</p>}
       {error && <p style={{ color: '#f87171' }}>{error}</p>}
+            <p style={{ fontSize: 12, opacity: 0.7 }}>
+        Privacy: your face is analysed on your own device only. Nothing is recorded or stored. Your video goes directly to your opponent during the call and nowhere else. If you sign in with Google, only your name, profile picture and game stats are saved for the leaderboard (never your email).
+      </p>
+      {user && <Leaderboard />}
     </div>
   )
 }
