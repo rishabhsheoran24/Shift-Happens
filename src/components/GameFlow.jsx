@@ -8,6 +8,7 @@ import { createMatch, joinMatch, subscribeToMatch, startMatchIfNeeded } from '..
 import { markReady } from '../game/readyService'
 import Match from './Match'
 import PickPhase from './PickPhase'
+import VideoPanel from '../video/VideoPanel'
 
 // CHANGED: a video tile can now show an emoji "overlay" (e.g. Sunglasses 🕶️ when a shield is active)
 function Video({ stream, muted = false, mirror = false, label, overlay = null }) {
@@ -64,12 +65,20 @@ export default function GameFlow() {
   const [error, setError] = useState('')
   const [phase, setPhase] = useState('lobby')
   const [deck, setDeck] = useState(null)
+    const [messages, setMessages] = useState([])
   const [overlays, setOverlays] = useState({ me: null, opp: null })   // NEW: shield emojis on the tiles
   const createdRef = useRef(false)
   const startTriedRef = useRef(false)   // NEW: only try to start the match once
 
   const camera = useLocalCamera()
-  const room = usePeerRoom({ localStream: camera.stream, onMessage: () => {} })
+    const room = usePeerRoom({
+    localStream: camera.stream,
+    onMessage: (d) => {
+      if (d && d.type === 'chat' && typeof d.text === 'string') {
+        setMessages((m) => [...m.slice(-49), { from: 'them', text: d.text.slice(0, 200) }])
+      }
+    },
+  })
   const laugh = useLaughScore(camera.stream)
 
     useEffect(() => {
@@ -138,6 +147,10 @@ export default function GameFlow() {
     }
   }
 
+    function sendChat(text) {
+    room.send({ type: 'chat', text })
+    setMessages((m) => [...m.slice(-49), { from: 'me', text }])
+  }
   function handleDeckDone(chosen) {
     setDeck(chosen)
     markReady(activeCode, uid).catch((e) => setError(e.message))
@@ -155,10 +168,14 @@ export default function GameFlow() {
   if (phase === 'pick' || phase === 'match') {
     return (
       <div style={{ display: 'flex', gap: 16, padding: 16, color: '#eee' }}>
-        <div>
-          <Video stream={camera.stream} muted mirror label="You" overlay={overlays.me} />
-          <Video stream={room.remoteStream} label="Opponent" overlay={overlays.opp} />
-        </div>
+                <VideoPanel
+          localStream={camera.stream}
+          remoteStream={room.remoteStream}
+          localOverlay={overlays.me}
+          remoteOverlay={overlays.opp}
+          messages={messages}
+          onSendChat={sendChat}
+        />
         {phase === 'pick' && !deck && <PickPhase onDone={handleDeckDone} />}
         {phase === 'pick' && deck && <h2>Deck locked in! Waiting for your opponent...</h2>}
         {phase === 'match' && (
