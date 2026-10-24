@@ -7,7 +7,7 @@ import Match from '../components/Match'
 const fakeCards = Array.from({ length: 10 }, (_, i) => ({
   id: `card${i + 1}`,
   title: `Card ${i + 1}`,
-  type: 'meme',
+    type: ['meme', 'audio', 'video'][i % 3],
   url: `https://placehold.co/300x200?text=Card+${i + 1}`,
   cost: 2,
   uploadedBy: 'test',

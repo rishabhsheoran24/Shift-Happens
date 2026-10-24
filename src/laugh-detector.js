@@ -1,5 +1,10 @@
 // src/laugh-detector.js
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { NO_FACE_GRACE_MS } from "./game/constants.js";
+
+// Tuning knob: a full smile alone only reaches ~60, so we boost the result a little.
+// Raise it if players find it too hard to reach high scores, lower it if too easy.
+const SCORE_GAIN = 1.25;
 
 export class LaughDetector {
   constructor(video) {
@@ -14,6 +19,9 @@ export class LaughDetector {
     this.running = false;
     this.scoreListeners = [];
     this.laughListeners = [];
+    this.faceListeners = [];  // NEW: told when the face appears / disappears
+    this.faceVisible = true;  // NEW
+    this.noFaceSince = null;  // NEW
     this.resetRound();
   }
 
@@ -34,13 +42,33 @@ export class LaughDetector {
     }
   }
 
+  // CHANGED: jaw-open and cheek-squint now only count when there is a real smile,
+  // so yawning, talking or a surprised "O" mouth no longer look like laughing.
   rawScore(result) {
     const shapes = result.faceBlendshapes?.[0]?.categories;
     if (!shapes) return null; // no face in frame
     const get = (n) => shapes.find((s) => s.categoryName === n)?.score ?? 0;
     const smile = (get("mouthSmileLeft") + get("mouthSmileRight")) / 2;
     const squint = (get("cheekSquintLeft") + get("cheekSquintRight")) / 2;
-    return Math.min(100, (smile * 0.6 + get("jawOpen") * 0.2 + squint * 0.2) * 100);
+    const extras = smile > 0.15 ? get("jawOpen") * 0.2 + squint * 0.2 : 0;
+    return Math.min(100, (smile * 0.6 + extras) * 100 * SCORE_GAIN);
+  }
+
+  // NEW: works out whether the face is "visible", allowing a short grace period
+  updateFace(seen) {
+    const now = performance.now();
+    let visible;
+    if (seen) {
+      this.noFaceSince = null;
+      visible = true;
+    } else {
+      if (this.noFaceSince === null) this.noFaceSince = now;
+      visible = now - this.noFaceSince < NO_FACE_GRACE_MS;
+    }
+    if (visible !== this.faceVisible) {
+      this.faceVisible = visible;
+      this.faceListeners.forEach((cb) => cb(visible));
+    }
   }
 
   // Call once at match start while the player keeps a neutral face
@@ -66,8 +94,12 @@ export class LaughDetector {
     if (this.video.currentTime !== this.lastTime) {
       this.lastTime = this.video.currentTime;
       const raw = this.rawScore(this.landmarker.detectForVideo(this.video, performance.now()));
+      this.updateFace(raw !== null);                       // NEW
       const adjusted = raw === null ? 0
         : Math.max(0, (raw - this.baseline) / (100 - this.baseline || 1)) * 100;
+      // NEW: while the player is clearly calm, slowly re-learn their neutral face
+      // so lighting / posture changes after calibration don't cause false laughs.
+      if (raw !== null && adjusted < 8) this.baseline = this.baseline * 0.995 + raw * 0.005;
       this.recent.push(adjusted);
       if (this.recent.length > 8) this.recent.shift();
       this.score = this.recent.reduce((a, b) => a + b, 0) / this.recent.length;
@@ -101,4 +133,5 @@ export class LaughDetector {
 
   onScore(cb) { this.scoreListeners.push(cb); }
   onLaugh(cb) { this.laughListeners.push(cb); }
+  onFace(cb) { this.faceListeners.push(cb); }   // NEW
 }

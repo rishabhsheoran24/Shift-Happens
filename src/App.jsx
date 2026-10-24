@@ -10,4 +10,8 @@ export default function App() {
       <LiveTest />
     </SoundProvider>
   );
+import GameFlow from './components/GameFlow'
+
+export default function App() {
+  return <GameFlow />
 }
