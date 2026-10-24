@@ -304,7 +304,7 @@ export default function Match({
 
     fresh.forEach((p) => {
       if (p.kind === 'attack') {
-        setTimeout(() => setStaleIds((s) => [...s, p.playId]), STALE_MS)
+                setTimeout(() => setStaleIds((s) => [...s, p.playId]), Math.max(STALE_MS, hitSeconds(p.card) * 1000 + 10000))
         if (p.playedBy !== uid) queueRef.current.push(p) // an attack aimed at me
       }
     })
