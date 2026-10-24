@@ -55,6 +55,13 @@ function Video({ stream, muted = false, mirror = false, label, overlay = null })
   )
 }
 
+function StoneButton({ children, variant = 'gold', onClick, disabled = false }) {
+  return (
+    <button className={`stone-button ${variant}`} onClick={onClick} disabled={disabled}>
+      <span>{children}</span>
+    </button>
+  )
+}
 export default function GameFlow() {
   const [uid, setUid] = useState(null)
   const [user, setUser] = useState(null)
@@ -227,7 +234,7 @@ export default function GameFlow() {
 
   if (phase === 'pick' || phase === 'match') {
     return (
-      <div style={{ display: 'flex', gap: 16, padding: 16, color: '#eee' }}>
+      <div className="game-row">
                 <VideoPanel
           localStream={camera.stream}
           remoteStream={room.remoteStream}
@@ -248,7 +255,9 @@ export default function GameFlow() {
             faceVisible={laugh.faceVisible}                    // NEW
             opponentLeft={room.status === 'disconnected'}      // NEW
             onOverlay={handleOverlay}  
-                        onPlayAgain={handlePlayAgain}
+            onPlayAgain={handlePlayAgain}
+            localStream={camera.stream}
+            remoteStream={room.remoteStream}
             onBackToLobby={backToLobby}
             rematchWaiting={rematch === 'waiting'}
             opponentWantsRematch={oppRematch}                        // NEW
@@ -258,50 +267,89 @@ export default function GameFlow() {
     )
   }
 
-  return (
-    <div style={{ maxWidth: 600, margin: '20px auto', padding: 16, color: '#eee' }}>
-      <h2>Poker Face Arena</h2>
+    return (
+    <main className="lobby scene">
+      <div className="vignette" />
+      <section className="lobby-panel" aria-label="Enter the arena">
+        <div className="panel-rivet r1" /><div className="panel-rivet r2" />
+        <header className="logo-lockup">
+          <span className="eyebrow">THE ULTIMATE NO-LAUGH DUEL</span>
+          <h1>POKER FACE<br /><b>ARENA</b></h1>
+        </header>
+
+        <div className="setup-grid">
+          <div className="setup-step">
+            <div className="step-title"><span>1</span> Choose your fighter</div>
             {!authReady && <p>Loading...</p>}
-      {authReady && !user && (
-        <div>
-          <button onClick={() => loginWithGoogle().catch((e) => setError(e.message))}>Sign in with Google</button>{' '}
-          <button onClick={() => playAsGuest().catch((e) => setError(e.message))}>Play as guest</button>
+            {authReady && !user && (
+              <>
+                <button className="identity-card" onClick={() => loginWithGoogle().catch((e) => setError(e.message))}>
+                  <span className="avatar">G</span>
+                  <span><strong>Sign in with Google</strong><small>Save your rank and wins</small></span>
+                  <span className="check">G</span>
+                </button>
+                <div className="or"><i />OR<i /></div>
+                <button className="identity-card" onClick={() => playAsGuest().catch((e) => setError(e.message))}>
+                  <span className="avatar">?</span>
+                  <span><strong>Play as guest</strong><small>Not on the leaderboard</small></span>
+                  <span className="check">→</span>
+                </button>
+              </>
+            )}
+            {user && (
+              <>
+                <div className="identity-card active">
+                  <span className="avatar">{(user.isAnonymous ? 'G' : (user.displayName || 'P')).slice(0, 1).toUpperCase()}</span>
+                  <span><strong>{user.isAnonymous ? 'Guest' : user.displayName}</strong><small>Ready for battle</small></span>
+                  <span className="check">✓</span>
+                </div>
+                <StoneButton variant="stone" onClick={logout}>LOG OUT</StoneButton>
+              </>
+            )}
+          </div>
+
+          <div className="setup-step">
+            <div className="step-title"><span>2</span> Ready your camera</div>
+            <button className={`camera-preview ${camera.stream ? 'active' : ''}`} onClick={camera.start} disabled={!!camera.stream}>
+              <div className="camera-person"><i /><b /></div>
+              <span>{camera.stream ? 'Camera ready' : 'Enable camera'}</span>
+              <small>{camera.stream ? laughText : 'Video stays peer-to-peer'}</small>
+            </button>
+            {camera.error && <p className="lobby-error">Camera error: {camera.error}</p>}
+            <div className="privacy"><span>◆</span> Your face is analysed only on this device.</div>
+          </div>
         </div>
-      )}
-      {user && (
-        <p>
-          Signed in as {user.isAnonymous ? 'Guest' : user.displayName}{' '}
-          <button onClick={logout}>Log out</button>
-        </p>
-      )}
 
-      <button onClick={camera.start} disabled={!!camera.stream}>Start camera</button>
-      {camera.error && <p style={{ color: '#f87171' }}>Camera error: {camera.error}</p>}
-      <p>{laughText}</p>
+        <div className="room-actions">
+          <div className="join-box">
+            <label>ENTER ROOM CODE</label>
+            <input
+              value={codeInput}
+              onChange={(e) => setCodeInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))}
+              placeholder="— — — —"
+              maxLength={4}
+              aria-label="Four character room code"
+            />
+            <StoneButton onClick={handleJoin} disabled={!canPlay || codeInput.length < 4}>JOIN</StoneButton>
+          </div>
+          <div className="divider"><span>OR</span></div>
+          <div className="create-box">
+            <StoneButton variant="red" onClick={handleCreate} disabled={!canPlay || role === 'host'}>CREATE A ROOM</StoneButton>
+            <small>Invite a friend with a private code</small>
+          </div>
+        </div>
 
-      <button onClick={handleCreate} disabled={!canPlay || role === 'host'}>Create room</button>
-      {room.roomCode && role === 'host' && (
-        <p style={{ fontWeight: 'bold', color: '#facc15' }}>Share this code: {room.roomCode}</p>
-      )}
-
-      <p>Or join a friend:</p>
-      <input
-        value={codeInput}
-        onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
-        placeholder="CODE"
-        maxLength={4}
-        style={{ width: 90, marginRight: 8, padding: 8, fontSize: 16 }}
-      />
-      <button onClick={handleJoin} disabled={!canPlay || codeInput.length < 4}>Join room</button>
-
-      <p>Status: {room.status}</p>
-      {/* NEW: show connection problems (e.g. "Room not found. Check the code.") */}
-      {room.error && <p style={{ color: '#f87171' }}>{room.error}</p>}
-      {error && <p style={{ color: '#f87171' }}>{error}</p>}
-            <p style={{ fontSize: 12, opacity: 0.7 }}>
-        Privacy: your face is analysed on your own device only. Nothing is recorded or stored. Your video goes directly to your opponent during the call and nowhere else. If you sign in with Google, only your name, profile picture and game stats are saved for the leaderboard (never your email).
-      </p>
-      {user && <Leaderboard />}
-    </div>
+        <div className="lobby-extra">
+          {room.roomCode && role === 'host' && <p className="code-big">Share this code: {room.roomCode}</p>}
+          <p>Status: {room.status}</p>
+          {room.error && <p className="lobby-error">{room.error}</p>}
+          {error && <p className="lobby-error">{error}</p>}
+          <p style={{ fontSize: 11, opacity: 0.75 }}>
+            Privacy: your face is analysed on your own device only. Nothing is recorded or stored. Your video goes directly to your opponent during the call and nowhere else. If you sign in with Google, only your name, profile picture and game stats are saved for the leaderboard (never your email).
+          </p>
+        </div>
+      </section>
+      {user && <div className="lobby-extra outside"><Leaderboard /></div>}
+    </main>
   )
 }
