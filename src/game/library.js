@@ -41,7 +41,7 @@ const shield = (id, title, effect) => ({
   uploadedBy: 'library',
 })
 
-export const LIBRARY = [
+const RAW_LIBRARY = [
   // Photos (memes)
   photo('p1', 'Mujhe Ghar Jaana Hai', 'meme1.jpeg'),
   photo('p2', 'Zindagi Badal Di', 'meme2.jpeg'),
@@ -120,3 +120,12 @@ export const LIBRARY = [
   shield('s1', 'Sunglasses', 'block'),
   shield('s2', 'Umbrella', 'halve'),
 ]
+// Real length (seconds) of each clip, so cards stay on screen for their full length
+const DURATIONS = {
+  g1: 9.14, g2: 4.54, g3: 6.47,
+  v1: 2.54, v2: 2.54, v3: 3.27, v4: 3.74, v5: 3.95, v6: 6.06, v7: 7.92, v8: 18.11, v9: 3.39, v10: 4.1,
+  v11: 3.76, v12: 3.4, v13: 5.64, v14: 1.6, v15: 2.88, v16: 7.36, v17: 5.94, v18: 4.64, v19: 1.58, v20: 2.21,
+  a2: 3.11, a3: 9.12, a4: 30.96,
+}
+
+export const LIBRARY = RAW_LIBRARY.map((c) => (DURATIONS[c.id] ? { ...c, duration: DURATIONS[c.id] } : c))

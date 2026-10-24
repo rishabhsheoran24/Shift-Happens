@@ -17,8 +17,16 @@ export function multiplierOf(card) {
   return MULTIPLIERS[card.type] ?? 1
 }
 
+// Longest a card may stay on the other player's screen (stops a tampered card from locking it)
+export const MAX_HIT_SECONDS = 35
+
 export function hitSeconds(card) {
-  return HIT_SECONDS[card.type] ?? 3
+  const fixed = HIT_SECONDS[card.type] ?? 3
+  const isTimed = card.type === 'gif' || card.type === 'audio' || card.type === 'video'
+  if (isTimed && typeof card.duration === 'number' && card.duration > 0) {
+    return Math.min(MAX_HIT_SECONDS, card.duration + 0.5)
+  }
+  return fixed
 }
 
 // Name shown in the "INCOMING ..." warning (the actual meme stays hidden)
