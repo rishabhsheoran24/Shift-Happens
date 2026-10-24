@@ -152,3 +152,32 @@ code {
   .deck-controls{gap:4px}
   .deck-arrow{width:24px;height:32px}
 }
+
+/* Full-page lobby notice board. */
+.lobby{
+  min-height:100vh;
+  padding:0 0 64px;
+  align-items:stretch;
+  background-color:#765033;
+  background-image:none;
+}
+.lobby-panel{
+  width:100%;
+  min-height:calc(100vh - 64px);
+  border:0;
+  border-radius:0;
+  box-shadow:inset 0 0 0 5px #d0ad7b,inset 0 0 90px #3b241799;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  padding:60px max(24px,calc((100vw - 850px) / 2));
+}
+.logo-lockup{margin-top:0}
+.versus{transform:translateY(32px)}
+
+@media(max-width:700px){
+  .lobby{padding:0 0 58px}
+  .lobby-panel{min-height:calc(100vh - 58px);padding:34px 20px}
+  .versus{transform:translateY(20px)}
+}
+
