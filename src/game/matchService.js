@@ -54,7 +54,7 @@ export async function joinMatch(roomCode, uid) {
 export async function addPlay(roomCode, uid, entry) {
   const playId = `${uid}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   await updateDoc(matchRef(roomCode), {
-    plays: arrayUnion({ ...entry, playId, playedBy: uid, at: Date.now() }),
+        plays: arrayUnion(JSON.parse(JSON.stringify({ ...entry, playId, playedBy: uid, at: Date.now() }))),
   });
 }
 
