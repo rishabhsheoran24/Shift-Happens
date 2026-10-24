@@ -375,13 +375,17 @@ export default function Match({
   const myAttackOpen = unresolvedAttacks(allPlays).some((a) => a.playedBy === uid && !staleIds.includes(a.playId))
   const busy = myAttackOpen || !!myShield
 
-  function handleAttack(card) {
+    function handleAttack(card) {
     if (over || busy || usedIds.includes(card.id)) return
     if (!spend(costOf(card))) return
     setUsedIds((u) => [...u, card.id])
-    playCardInMatch(roomCode, uid, card).catch(console.error)
+    const cleanCard = JSON.parse(JSON.stringify(card))
+    playCardInMatch(roomCode, uid, cleanCard).catch((e) => {
+      console.error(e)
+      setUsedIds((u) => u.filter((id) => id !== card.id))
+      showNotice('⚠️ That card could not be sent: ' + e.message)
+    })
   }
-
   // A shield only works on MY device. Nothing about it is written to the shared match,
   // so the opponent can't see it.
   function handleShield(card) {
@@ -399,7 +403,7 @@ export default function Match({
 
   function renderCard(card) {
     if (!isSafeUrl(card.url)) return <p>⚠️ Card blocked (untrusted link)</p>
-    return <CardMedia card={card} />
+    return <CardMedia key={card.id + card.url} card={card} />
   }
 
   // What the ATTACKER sees about their latest attack (no mention of shields)
