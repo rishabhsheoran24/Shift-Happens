@@ -6,6 +6,29 @@ import { PICK_SECONDS } from '../game/constants'
 
 const DECK_SIZE = 10
 
+const FILTERS = [
+  ['all', 'ALL'],
+  ['image', 'IMAGES'],
+  ['gif', 'GIFS'],
+  ['video', 'VIDEOS'],
+  ['audio', 'AUDIO'],
+  ['shield', 'SHIELDS'],
+]
+
+function matchesFilter(card, filter) {
+  if (filter === 'all') return true
+  if (filter === 'image') return card.type === 'photo' || card.type === 'meme'
+  return card.type === filter
+}
+
+function Thumb({ card }) {
+  if (card.type === 'shield') return <div className="pick-emoji">{SHIELD_EMOJI[card.effect] ?? '🛡️'}</div>
+  if (card.type === 'audio') return <div className="pick-emoji">🎵</div>
+  if (!isSafeUrl(card.url)) return <div className="pick-emoji">❓</div>
+  if (card.type === 'video') return <video src={card.url} muted preload="metadata" />
+  return <img src={card.url} alt="" loading="lazy" />
+}
+
 export default function PickPhase({ onDone }) {
   const [custom, setCustom] = useState([])
   const [selected, setSelected] = useState([])
@@ -13,9 +36,11 @@ export default function PickPhase({ onDone }) {
   const [url, setUrl] = useState('')
   const [title, setTitle] = useState('')
   const [msg, setMsg] = useState('')
+  const [filter, setFilter] = useState('all')
   const doneRef = useRef(false)
 
   const all = [...LIBRARY, ...custom]
+  const shown = all.filter((c) => matchesFilter(c, filter))
 
   useEffect(() => {
     const t = setInterval(() => setTimeLeft((s) => Math.max(0, s - 1)), 1000)
@@ -24,6 +49,7 @@ export default function PickPhase({ onDone }) {
 
   useEffect(() => {
     if (timeLeft === 0) finish()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft])
 
   function finish() {
@@ -63,70 +89,65 @@ export default function PickPhase({ onDone }) {
     setMsg('Added!')
   }
 
+  const pct = (selected.length / DECK_SIZE) * 100
+  const bg = `url(${import.meta.env.BASE_URL}arena-bg.jpg)`
+
   return (
-    <div style={{ maxWidth: 700, color: '#eee' }}>
-      <h2>Pick your 10 cards: {timeLeft}s left</h2>
-      <p>
-        Selected {selected.length} / {DECK_SIZE}. Attack cost / multiplier: image 2 / x4, gif 3 / x3,
-        video 4 / x2 (audio 3 / x3). Shields: Sunglasses (blocks, cost 3), Umbrella (halves, cost 2).
-        Shields use up a deck slot, so choose wisely! If time runs out, random cards fill your deck.
-      </p>
+    <main className="deck-page" style={{ backgroundImage: bg }}>
+      <section className="deck-board">
+        <span className="deck-eyebrow">TIME LEFT · {timeLeft}s</span>
+        <h1>BUILD YOUR BATTLE DECK</h1>
+        <p className="deck-sub">
+          Choose {DECK_SIZE} cards. Shields use up a deck slot. If time runs out, random cards fill your deck.
+        </p>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        {all.map((card) => {
-          const on = selected.includes(card.id)
-          const isShield = card.type === 'shield'
-          return (
-            <button
-              key={card.id}
-              onClick={() => toggle(card.id)}
-              style={{
-                padding: 8,
-                width: 150,
-                background: on ? '#2e7d32' : '#222',
-                color: '#eee',
-                border: on ? '2px solid #81c784' : '2px solid #444',
-                borderRadius: 8,
-                cursor: 'pointer',
-              }}
-            >
-              {card.type === 'photo' || card.type === 'gif' ? (
-                <img src={card.url} alt="" width="130" />
-              ) : (
-                <div style={{ height: 60, fontSize: 32 }}>
-                  {isShield ? SHIELD_EMOJI[card.effect] : card.type === 'audio' ? '🎵' : '🎬'}
-                </div>
-              )}
-              <div>{card.title}</div>
-              <div>
-                {isShield
-                  ? `shield (${card.effect}) · cost ${costOf(card)}`
-                  : `${card.type} · cost ${costOf(card)} · x${multiplierOf(card)}`}
-              </div>
+        <div className="deck-progress">
+          <i style={{ width: `${pct}%` }} />
+          <b>{selected.length} / {DECK_SIZE} SELECTED</b>
+        </div>
+
+        <div className="deck-filters">
+          {FILTERS.map(([key, label]) => (
+            <button key={key} className={filter === key ? 'on' : ''} onClick={() => setFilter(key)}>
+              {label}
             </button>
-          )
-        })}
-      </div>
+          ))}
+        </div>
 
-      <h3>Add your own (paste a direct link)</h3>
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Card name"
-        style={{ padding: 8, marginRight: 8 }}
-      />
-      <input
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-        placeholder="https://.../file.jpg"
-        style={{ padding: 8, width: 260, marginRight: 8 }}
-      />
-      <button onClick={addLink}>Add</button>
-      <p>{msg}</p>
+        <div className="deck-grid">
+          {shown.map((card) => {
+            const on = selected.includes(card.id)
+            const isShield = card.type === 'shield'
+            return (
+              <button key={card.id} className={`pick-card ${on ? 'on' : ''}`} onClick={() => toggle(card.id)}>
+                <span className="pick-cost">{costOf(card)}</span>
+                <div className="pick-art"><Thumb card={card} /></div>
+                <strong>{card.title}</strong>
+                <small>{isShield ? `shield · ${card.effect}` : `${card.type} · x${multiplierOf(card)}`}</small>
+                <em>{on ? 'SELECTED ✓' : 'ADD CARD'}</em>
+              </button>
+            )
+          })}
+        </div>
 
-      <button onClick={finish} disabled={selected.length !== DECK_SIZE} style={{ padding: 12, fontSize: 16 }}>
-        Lock in deck
-      </button>
-    </div>
+        <div className="deck-custom">
+          <div>
+            <b>ADD YOUR OWN MEME</b>
+            <small>Direct links from trusted sites only: .jpg .png .gif .mp3 .mp4</small>
+          </div>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Card name (optional)" />
+          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://site.com/meme.png" />
+          <button className="deck-add" onClick={addLink}>ADD LINK</button>
+        </div>
+        {msg && <p className="deck-msg">{msg}</p>}
+
+        <div className="deck-footer">
+          <span>{selected.length === DECK_SIZE ? 'Deck ready!' : `Choose ${DECK_SIZE - selected.length} more cards`}</span>
+          <button className="stone-button gold" onClick={finish} disabled={selected.length !== DECK_SIZE}>
+            <span>ENTER ARENA</span>
+          </button>
+        </div>
+      </section>
+    </main>
   )
 }
