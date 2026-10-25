@@ -530,24 +530,38 @@ export default function Match({
         </div>
       </section>
 
-      {over && (
-        <div className="result-board">
-          <h1>{outcome === 'win' ? '🏆 YOU WIN!' : outcome === 'lose' ? '💀 YOU LOSE' : '🤝 TIE'}</h1>
-          {opponentLeft && <p>Your opponent left the room.</p>}
-          <div className="result-buttons">
-            <button className="stone-button gold" onClick={onPlayAgain} disabled={rematchWaiting || opponentLeft}>
-              <span>
-                {rematchWaiting
-                  ? 'Waiting for your opponent...'
-                  : opponentWantsRematch
-                    ? 'Opponent wants a rematch: Play again'
-                    : 'Play again'}
-              </span>
-            </button>
-            <button className="stone-button stone" onClick={onBackToLobby}><span>Back to lobby</span></button>
-          </div>
+          {over && (
+        <div className="result-overlay">
+          <section className="results-board">
+            <span className="eyebrow">MATCH COMPLETE</span>
+            <h1>{outcome === 'win' ? 'VICTORY' : outcome === 'lose' ? 'DEFEAT' : 'TIE'}</h1>
+            <p className="result-copy">
+              {outcome === 'win' ? 'You kept the straightest face in the arena.' : outcome === 'lose' ? 'You laughed first. Better luck next time.' : 'Evenly matched. Nobody blinked.'}
+            </p>
+            <div className="score-table">
+              <div className="score-row head"><span>PLAYER</span><span>HP LEFT</span><span>SCORE</span></div>
+              <div className="score-row me"><span>You</span><span>{Math.round(myHp)}</span><span>{myScore}</span></div>
+              <div className="score-row"><span>Rival</span><span>{Math.round(opponentHp)}</span><span>{theirScore}</span></div>
+            </div>
+            {opponentLeft && <p>Your opponent left the room.</p>}
+            <div className="result-question">
+              <h2>WHAT'S YOUR NEXT MOVE?</h2>
+              <div>
+                <button className="stone-button gold" onClick={onPlayAgain} disabled={rematchWaiting || opponentLeft}>
+                  <span>
+                    {rematchWaiting
+                      ? 'Waiting for your opponent...'
+                      : opponentWantsRematch
+                        ? 'Opponent wants a rematch: Play again'
+                        : 'PLAY AGAIN'}
+                  </span>
+                </button>
+                <button className="stone-button red" onClick={onBackToLobby}><span>RETURN TO LOBBY</span></button>
+              </div>
+            </div>
+          </section>
         </div>
-      )}
+      )}  
     </main>
   )
 }
