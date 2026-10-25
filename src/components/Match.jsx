@@ -454,6 +454,11 @@ export default function Match({
         </div>
       </div>
 
+              {!over && current && (
+        <div className="attack-screen">
+          <div className="meme">{renderCard(current.attack.card)}</div>
+        </div>
+      )}
       <div className="hud-messages">
         {!over && !faceVisible && <p>⚠️ We can't see your face! Your composure is draining.</p>}
         {!over && opponentLeft && <p>Opponent disconnected... you win if they don't return.</p>}
@@ -473,16 +478,6 @@ export default function Match({
             <div className="video-feed blue-feed">
               <FeedVideo stream={localStream} muted mirror />
               {!over && myShield && <div className="shield-badge">{SHIELD_EMOJI[myShield.effect]}</div>}
-              {!over && current && (
-                <div className="meme-on-feed">
-                  <p>
-                    {current.attack.card.title} (x{multiplierOf(current.attack.card)}). Don't laugh!
-                    {myShield?.effect === 'block' && ' 🕶️ Block!'}
-                    {myShield?.effect === 'halve' && ' ☂️ Halved!'}
-                  </p>
-                  {renderCard(current.attack.card)}
-                </div>
-              )}
             </div>
             <div className="wood-grain" />
           </div>
