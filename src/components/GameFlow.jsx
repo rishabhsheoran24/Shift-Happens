@@ -256,7 +256,15 @@ export default function GameFlow() {
           onSendChat={sendChat}
         />
         {phase === 'pick' && !deck && <PickPhase onDone={handleDeckDone} />}
-        {phase === 'pick' && deck && <h2>Deck locked in! Waiting for your opponent...</h2>}
+                {phase === 'pick' && deck && (
+          <main className="deck-page" style={{ backgroundImage: `url(${import.meta.env.BASE_URL}arena-bg.jpg)` }}>
+            <section className="deck-board waiting-board">
+              <span className="deck-eyebrow">DECK LOCKED IN ✓</span>
+              <h1>WAITING FOR YOUR RIVAL</h1>
+              <p className="deck-sub">Your rival is still choosing their ten cards. The duel starts as soon as they are ready.</p>
+            </section>
+          </main>
+        )}
         {phase === 'match' && (
           <Match
             key={activeCode}

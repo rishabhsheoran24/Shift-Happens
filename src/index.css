@@ -271,3 +271,11 @@ code {
 .logo-lockup .eyebrow{translate:0 -16px}
 .room-actions .divider{align-self:end;translate:32px -7px}
 @media(max-width:700px){.lobby-panel{min-height:100vh;padding:34px 20px}.logo-lockup .eyebrow{translate:0 -12px}.room-actions .divider{translate:24px -7px}}
+.arena .hud-messages{position:absolute!important;top:auto!important;bottom:235px!important;left:50%!important;transform:translateX(-50%)!important;width:min(620px,90vw)!important;z-index:6}
+.arena .hud-messages p{margin:3px 0!important;padding:5px 12px!important;font-size:12px!important;text-align:center}
+.arena .deck-zone{bottom:50px!important}
+.arena .attack-screen{width:min(220px,15vw)!important}
+.laugh-meter{position:absolute;top:5px;bottom:5px;right:-26px;width:16px;background:#28150e;border:2px solid #c09b6b;border-radius:8px;overflow:hidden}
+.laugh-meter i{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(#ffd23f,#e8572a);box-shadow:inset 0 2px #fff0a0;transition:height .15s}
+.laugh-meter b{position:absolute;top:2px;left:0;right:0;font-size:10px;line-height:12px;text-align:center}
+.waiting-board{max-width:620px;margin-top:22vh;padding:40px 30px}

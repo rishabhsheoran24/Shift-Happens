@@ -468,7 +468,6 @@ export default function Match({
         {notice && <p>{notice}</p>}
         {attackerBanner && <p>{attackerBanner}</p>}
         {!over && busy && !myShield && <p>⏳ Your card is still active.</p>}
-        {!over && <p>😂 Laugh meter: {Math.round(laughScore)}</p>}
       </div>
 
       <section className="battlefield">
@@ -479,6 +478,7 @@ export default function Match({
               <FeedVideo stream={localStream} muted mirror />
               {!over && myShield && <div className="shield-badge">{SHIELD_EMOJI[myShield.effect]}</div>}
             </div>
+                        <div className="laugh-meter" title="Laugh meter"><i style={{ height: `${Math.max(0, Math.min(100, laughScore))}%` }} /><b>😂</b></div>
             <div className="wood-grain" />
           </div>
           <div className="score-stone"><small>SCORE</small><b>{myScore}</b></div>
