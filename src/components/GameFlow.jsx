@@ -55,6 +55,17 @@ function Video({ stream, muted = false, mirror = false, label, overlay = null })
   )
 }
 
+const RULES = [
+  ['Pick your deck', 'Choose 10 cards in 60 seconds. Empty slots are filled randomly.'],
+  ['Elixir', 'You start with 5 elixir and gain 1 every 5 seconds, up to 10.'],
+  ['Attack', 'Play a card to make it appear on the centre banner of your rival. Photo 2, GIF 3, audio 3, video 4 elixir.'],
+  ['Card length', 'Photos stay 3 seconds. GIFs, audio and videos play for their full length.'],
+  ['Do not laugh', 'Your rival laughing at your card costs them HP, and you score the damage you cause.'],
+  ['Shields', 'Sunglasses block and Umbrella halves damage for 10 seconds. Your rival cannot see them.'],
+  ['Cards', 'Use the arrows to see more of your cards.'],
+  ['Stay in frame', 'A hidden face costs HP. If your rival is gone for 10 seconds, you win.'],
+  ['Win', 'The match lasts 3 minutes. Lower HP loses. Equal HP means 30 seconds of overtime.'],
+]
 function StoneButton({ children, variant = 'gold', onClick, disabled = false }) {
   return (
     <button className={`stone-button ${variant}`} onClick={onClick} disabled={disabled}>
@@ -70,6 +81,7 @@ export default function GameFlow() {
   const [codeInput, setCodeInput] = useState('')
   const [activeCode, setActiveCode] = useState(null)
   const [error, setError] = useState('')
+    const [modal, setModal] = useState(null) // 'help' | 'board' | null
   const [phase, setPhase] = useState('lobby')
   const [deck, setDeck] = useState(null)
   const [messages, setMessages] = useState([])
@@ -347,9 +359,35 @@ export default function GameFlow() {
           <p style={{ fontSize: 11, opacity: 0.75 }}>
             Privacy: your face is analysed on your own device only. Nothing is recorded or stored. Your video goes directly to your opponent during the call and nowhere else. If you sign in with Google, only your name, profile picture and game stats are saved for the leaderboard (never your email).
           </p>
+                    <div className="lobby-links">
+            <StoneButton variant="gold" onClick={() => setModal('help')}>HOW TO PLAY</StoneButton>
+            <StoneButton variant="stone" onClick={() => setModal('board')} disabled={!user}>LEADERBOARD</StoneButton>
+          </div>
         </div>
       </section>
-      {user && <div className="lobby-extra outside"><Leaderboard /></div>}
+            {modal && (
+        <div className="modal-backdrop" onClick={() => setModal(null)}>
+          <section className="parchment-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setModal(null)} aria-label="Close">×</button>
+            {modal === 'help' && (
+              <>
+                <h2>HOW TO PLAY</h2>
+                <ol className="rules-list">
+                  {RULES.map(([t, d]) => (
+                    <li key={t}><b>{t}</b><span>{d}</span></li>
+                  ))}
+                </ol>
+              </>
+            )}
+            {modal === 'board' && (
+              <>
+                <h2>LEADERBOARD</h2>
+                <Leaderboard />
+              </>
+            )}
+          </section>
+        </div>
+      )}
     </main>
   )
 }
