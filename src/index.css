@@ -265,3 +265,9 @@ code {
 .deck-footer{display:flex;justify-content:flex-end;align-items:center;gap:16px;margin-top:14px;font-size:12px}
 .deck-footer .stone-button{white-space:nowrap;min-width:190px}
 @media(max-width:700px){.deck-custom{grid-template-columns:1fr}.deck-board{padding:18px 12px}}
+.lobby{min-height:100vh;padding:0;align-items:stretch;background-color:#765033;background-image:none}
+.lobby-panel{width:100%;min-height:100vh;border:0;border-radius:0;box-shadow:inset 0 0 0 5px #d0ad7b,inset 0 0 90px #3b241799;display:flex;flex-direction:column;justify-content:center;padding:60px max(24px,calc((100vw - 850px) / 2))}
+.logo-lockup{margin-top:0}
+.logo-lockup .eyebrow{translate:0 -16px}
+.room-actions .divider{align-self:end;translate:32px -7px}
+@media(max-width:700px){.lobby-panel{min-height:100vh;padding:34px 20px}.logo-lockup .eyebrow{translate:0 -12px}.room-actions .divider{translate:24px -7px}}
