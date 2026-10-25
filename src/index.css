@@ -205,3 +205,9 @@ code {
 .battle-card strong { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-art img, .card-art video { width: 100%; height: 100%; object-fit: cover; border: 0; border-radius: 4px; }
 .card-art .emoji { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 34px; }
+.arena .attack-screen{top:21%;width:min(250px,18vw);height:auto;padding:4px;z-index:30;background:#1b1512;overflow:hidden}
+.arena .attack-screen .meme{width:100%}
+.arena .attack-screen img,.arena .attack-screen video{display:block;width:100%;height:auto;max-height:300px;object-fit:contain;margin-top:5px}
+.arena .attack-screen audio{width:100%;margin-top:5px}
+.arena .attack-screen p{font-size:10px;margin:2px 0}
+.arena .attack-screen button{font-size:10px}
