@@ -211,3 +211,14 @@ code {
 .arena .attack-screen audio{width:100%;margin-top:5px}
 .arena .attack-screen p{font-size:10px;margin:2px 0}
 .arena .attack-screen button{font-size:10px}
+.lobby-links{display:flex;gap:10px;justify-content:center;margin-top:12px}
+.lobby-links .stone-button{white-space:nowrap;min-width:150px}
+.modal-backdrop{position:fixed;z-index:50;inset:0;display:grid;place-items:center;padding:24px;background:#100805cc;backdrop-filter:blur(5px)}
+.parchment-modal{position:relative;width:min(600px,94vw);max-height:90vh;overflow:auto;padding:34px 40px;text-align:center;color:#3d2618;background:linear-gradient(100deg,#d1aa73,#f0d39f 48%,#c89a61);border:7px solid #4b2c19;border-radius:10px;box-shadow:inset 0 0 0 3px #ffe0a8,0 20px 60px #000}
+.parchment-modal h2{font-family:'Alfa Slab One';letter-spacing:2px;margin:0}
+.rules-list{display:grid;gap:10px;margin:20px 0 0;padding:0;list-style:none;text-align:left}
+.rules-list li{display:grid;grid-template-columns:130px 1fr;gap:12px;padding-bottom:8px;border-bottom:1px solid #72503355}
+.rules-list li b{font-family:'Rye';font-size:12px}
+.rules-list li span{font-size:12px;line-height:1.4}
+.modal-close{position:absolute;right:12px;top:8px;border:0;background:none;color:#4b2c19;font-size:26px;cursor:pointer}
+@media(max-width:700px){.rules-list li{grid-template-columns:1fr;gap:3px}.parchment-modal{padding:26px 18px}}
